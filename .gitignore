@@ -1,0 +1,5 @@
+/bin/
+/adapter-state/
+/scratch/
+/artifacts/
+*.test
