@@ -39,4 +39,4 @@ See [the JSON contract](docs/protocol.md). Go callers can import `github.com/sha
 - Bounded RPC records, notifications, stderr, input, and output. Usage reports cover successful turns only and can be incomplete.
 - Separate instances/processes must not share the same state directory concurrently. The application owns scheduling, locking, work queues, retries, and recovery policy.
 
-This repository does not depend on role-runtime. Its runtime integration remains in that project's `internal/codexadapter` package. [Validation notes](docs/validation.md) distinguish automated checks from live backend recovery.
+This repository does not depend on role-runtime. Its runtime integration remains in that project's `internal/codexadapter` package. [Validation notes](docs/validation.md) distinguish automated checks from the successful six-role live recovery run and its limits.
