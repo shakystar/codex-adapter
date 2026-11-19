@@ -188,6 +188,9 @@ func TestCodexAdapterProcess(t *testing.T) {
 			notify("turn/completed", map[string]any{"threadId": id, "turn": map[string]any{"id": "turn-1", "status": status, "items": append(webFinalItems, map[string]any{"type": "agentMessage", "phase": "final_answer", "text": id + ":" + input[0].Text})}})
 			continue
 		case "thread/unsubscribe":
+			if mode == "cleanup-lost" {
+				os.Exit(0)
+			}
 			result = map[string]any{"status": "unsubscribed"}
 		}
 		send(map[string]any{"id": req.ID, "result": result})

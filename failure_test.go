@@ -124,3 +124,21 @@ func TestExecutionEvidenceAndNoReplay(t *testing.T) {
 		})
 	}
 }
+
+func TestCompletedTurnCleanupFailure(t *testing.T) {
+	cfg := failureConfig(t)
+	a, err := New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer a.Close()
+	_, err = a.Execute(context.Background(), Request{ID: "t", SessionKey: "s", Workspace: t.TempDir(), Tools: []string{"advisory"}, Input: "cleanup-lost"})
+	f := FailureOf(err)
+	if f == nil || f.Stage != "cleanup" || f.Execution != Completed || f.Retryable {
+		t.Fatalf("failure=%+v", f)
+	}
+	evidence, err := InspectSession(cfg.StateDir, "s")
+	if err != nil || evidence.Execution != Completed || !evidence.RecoveryRequired {
+		t.Fatalf("evidence=%+v err=%v", evidence, err)
+	}
+}
