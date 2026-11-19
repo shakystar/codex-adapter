@@ -22,6 +22,10 @@ import (
 const maxOutput = 256 << 10
 
 type Config struct {
+	// StartupAttempts includes the initial try (default 3, maximum 5).
+	StartupAttempts int
+	// RetryBackoff is exponential, capped at 5s; startup has one total deadline.
+	RetryBackoff      time.Duration
 	RPC               codexrpc.Config
 	StateDir          string
 	TaskTimeout       time.Duration
@@ -36,6 +40,7 @@ type Config struct {
 	OnStatus func(Status)
 }
 type Status struct {
+	Failure            *Failure      `json:"failure,omitempty"`
 	TaskID             string        `json:"taskId"`
 	Role               string        `json:"role"`
 	Phase              string        `json:"phase"`
@@ -86,6 +91,8 @@ type mapping struct {
 	Workspace    string `json:"workspace"`
 	Instructions string `json:"instructionDigest"`
 	ActiveTask   string `json:"activeTask,omitempty"`
+	TurnID       string `json:"turnId,omitempty"`
+	Execution    string `json:"execution,omitempty"`
 }
 type item struct {
 	ID     string `json:"id"`
@@ -103,7 +110,22 @@ type turn struct {
 	Error  json.RawMessage `json:"error"`
 }
 
-func New(cfg Config) (*Adapter, error) {
+func New(cfg Config) (*Adapter, error) { return NewContext(context.Background(), cfg) }
+
+func NewContext(ctx context.Context, cfg Config) (adapter *Adapter, err error) {
+	defer func() { err = failure(err, "initialize", NotStarted, 0) }()
+	if cfg.StartupAttempts < 0 || cfg.StartupAttempts > 5 || cfg.RetryBackoff < 0 {
+		return nil, errors.New("invalid startup retry policy")
+	}
+	if cfg.StartupAttempts == 0 {
+		cfg.StartupAttempts = 3
+	}
+	if cfg.RetryBackoff == 0 {
+		cfg.RetryBackoff = 250 * time.Millisecond
+	}
+	if cfg.RetryBackoff > 5*time.Second {
+		cfg.RetryBackoff = 5 * time.Second
+	}
 	if cfg.StateDir == "" {
 		return nil, errors.New("codex adapter requires state directory")
 	}
@@ -132,7 +154,7 @@ func New(cfg Config) (*Adapter, error) {
 		return nil, err
 	}
 	a := &Adapter{cfg: cfg, usage: Usage{Scope: "successful-turn-last-notification"}}
-	if err := a.start(context.Background()); err != nil {
+	if err := a.start(ctx); err != nil {
 		return nil, err
 	}
 	return a, nil
@@ -140,13 +162,41 @@ func New(cfg Config) (*Adapter, error) {
 func (a *Adapter) start(parent context.Context) error {
 	ctx, cancel := context.WithTimeout(parent, a.cfg.StartupTimeout)
 	defer cancel()
+	delay := a.cfg.RetryBackoff
+	for attempt := 1; attempt <= a.cfg.StartupAttempts; attempt++ {
+		err := a.startOnce(ctx, attempt)
+		if err == nil {
+			return nil
+		}
+		f := FailureOf(err)
+		if f == nil || !f.Retryable || attempt == a.cfg.StartupAttempts || ctx.Err() != nil {
+			return err
+		}
+		if a.cfg.OnStatus != nil {
+			a.cfg.OnStatus(Status{Phase: "startup_retry", Failure: f})
+		}
+		timer := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return failure(ctx.Err(), "backoff", NotStarted, attempt)
+		case <-timer.C:
+		}
+		delay *= 2
+		if delay > 5*time.Second {
+			delay = 5 * time.Second
+		}
+	}
+	return errors.New("invalid startup attempts")
+}
+func (a *Adapter) startOnce(ctx context.Context, attempt int) error {
 	c, err := codexrpc.Start(ctx, a.cfg.RPC)
 	if err != nil {
-		return err
+		return failure(err, "initialize", NotStarted, attempt)
 	}
 	if _, err = CheckAccount(ctx, c); err != nil {
 		c.Close()
-		return fmt.Errorf("codex account preflight: %w", err)
+		return failure(err, "account_read", NotStarted, attempt)
 	}
 	a.mu.Lock()
 	a.client = c
@@ -198,6 +248,7 @@ func (a *Adapter) Execute(parent context.Context, t Request) (result Result, err
 		ctx, cancel = context.WithTimeout(parent, a.cfg.TaskTimeout)
 	}
 	defer cancel()
+	stage, execution := "validate", NotStarted
 	began := time.Now()
 	status := Status{TaskID: t.ID, Role: t.Role}
 	emit := func(phase string) {
@@ -209,6 +260,8 @@ func (a *Adapter) Execute(parent context.Context, t Request) (result Result, err
 	}
 	defer func() {
 		if err != nil {
+			err = failure(err, stage, execution, 1)
+			status.Failure = FailureOf(err)
 			if errors.Is(err, context.Canceled) {
 				emit("canceled")
 			} else {
@@ -248,6 +301,8 @@ func (a *Adapter) Execute(parent context.Context, t Request) (result Result, err
 		}
 		m = prior
 		if m.ActiveTask != "" {
+			execution = Unknown
+			stage = "recovery"
 			err = errors.New("codex session has interrupted turn intent")
 			return result, err
 		}
@@ -274,6 +329,7 @@ func (a *Adapter) Execute(parent context.Context, t Request) (result Result, err
 			Servers map[string]json.RawMessage `json:"mcp_servers"`
 		} `json:"config"`
 	}
+	stage = "config_read"
 	emit("configuring")
 	if err = controlCall("config/read", map[string]any{"cwd": m.Workspace, "includeLayers": false}, &effective); err != nil {
 		a.Close()
@@ -302,6 +358,7 @@ func (a *Adapter) Execute(parent context.Context, t Request) (result Result, err
 			Cwd string `json:"cwd"`
 		} `json:"thread"`
 	}
+	stage = "thread_load"
 	emit("loading")
 	if err = controlCall(method, params, &response); err != nil {
 		a.Close()
@@ -315,6 +372,9 @@ func (a *Adapter) Execute(parent context.Context, t Request) (result Result, err
 	result.Session = m.ThreadID
 	// The durable intent precedes any model turn. A crash before its removal
 	// must never be silently replayed against this role thread.
+	stage = "intent_write"
+	m.Execution = Unknown
+	m.TurnID = ""
 	m.ActiveTask = t.ID
 	if err = writeMapping(path, m); err != nil {
 		a.Close()
@@ -336,12 +396,19 @@ func (a *Adapter) Execute(parent context.Context, t Request) (result Result, err
 	if len(a.cfg.OutputSchema) > 0 {
 		turnParams["outputSchema"] = a.cfg.OutputSchema
 	}
+	stage, execution = "turn_start", Unknown
 	emit("starting")
 	if err = controlCall("turn/start", turnParams, &started); err != nil {
 		return result, err
 	}
 	if started.Turn.ID == "" {
 		return result, errors.New("codex missing turn ID")
+	}
+	execution = Started
+	stage = "turn_observe"
+	m.Execution, m.TurnID = Started, started.Turn.ID
+	if err = writeMapping(path, m); err != nil {
+		return result, err
 	}
 	var text string
 	var usage Usage
@@ -547,6 +614,9 @@ waitTurn:
 				if e.Turn.ID != started.Turn.ID {
 					continue
 				}
+				if e.Turn.Status == "completed" {
+					execution = Completed
+				}
 				if e.Turn.Status != "completed" {
 					return result, fmt.Errorf("codex turn ended %s", e.Turn.Status)
 				}
@@ -575,6 +645,11 @@ waitTurn:
 	var unsubscribed struct {
 		Status string `json:"status"`
 	}
+	stage = "cleanup"
+	m.Execution = Completed
+	if err = writeMapping(path, m); err != nil {
+		return result, err
+	}
 	emit("unloading")
 	if err = controlCall("thread/unsubscribe", map[string]any{"threadId": m.ThreadID}, &unsubscribed); err != nil {
 		return result, err
@@ -583,6 +658,7 @@ waitTurn:
 		return result, errors.New("codex invalid unsubscribe response")
 	}
 	m.ActiveTask = ""
+	m.Execution = Completed
 	if err = writeMapping(path, m); err != nil {
 		return result, err
 	}

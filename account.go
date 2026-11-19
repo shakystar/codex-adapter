@@ -38,7 +38,7 @@ func CheckAccount(ctx context.Context, c *codexrpc.Client) (AccountStatus, error
 		}
 	}
 	if status.RequiresAuth && reply.Account == nil {
-		return status, errors.New("Codex login required")
+		return status, ErrLoginRequired
 	}
 	return status, nil
 }

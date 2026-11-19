@@ -40,3 +40,11 @@ See [the JSON contract](docs/protocol.md). Go callers can import `github.com/sha
 - Separate instances/processes must not share the same state directory concurrently. The application owns scheduling, locking, work queues, retries, and recovery policy.
 
 This repository does not depend on role-runtime. Its runtime integration remains in that project's `internal/codexadapter` package. [Validation notes](docs/validation.md) distinguish automated checks from the successful six-role live recovery run and its limits.
+
+## Failure handling
+
+Structured `Failure` metadata distinguishes model dispatch state from task failure.
+Use `NewContext` for cancelable startup; classified transient account-preflight errors
+have bounded startup retries. Turn submission is never automatically retried.
+`--state DIR --inspect-session KEY` reads durable local evidence without model calls.
+See [failure contract and ownership](docs/protocol.md#failure-contract-v1-and-responsibility-2026-11-19).

@@ -44,8 +44,29 @@ func TestCodexAdapterProcess(t *testing.T) {
 		if os.Getenv("ROLE_RUNTIME_STALL_CONTROL") == req.Method {
 			continue
 		}
-		if req.Method == "account/read" && os.Getenv("CODEX_ADAPTER_AUTH_ERROR") == "1" {
-			send(map[string]any{"id": req.ID, "error": map[string]any{"code": -32603, "message": "workspace routing discovery timed out private-data"}})
+		if path := os.Getenv("CODEX_ADAPTER_CALL_LOG"); path != "" {
+			f, e := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+			if e != nil {
+				os.Exit(10)
+			}
+			fmt.Fprintln(f, req.Method)
+			f.Close()
+		}
+		failAccount := os.Getenv("CODEX_ADAPTER_AUTH_ERROR") == "1"
+		if marker := os.Getenv("CODEX_ADAPTER_FAIL_ONCE"); marker != "" && req.Method == "account/read" {
+			f, e := os.OpenFile(marker, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+			if e == nil {
+				f.Close()
+				failAccount = true
+			}
+		}
+		if req.Method == "account/read" && failAccount {
+			send(map[string]any{"id": req.ID, "error": map[string]any{"code": -32603, "message": func() string {
+				if os.Getenv("CODEX_ADAPTER_UNAUTHORIZED") == "1" {
+					return "workspace routing discovery unauthorized private-data"
+				}
+				return "workspace routing discovery timed out private-data"
+			}()}})
 			continue
 		}
 		var result any = map[string]any{}

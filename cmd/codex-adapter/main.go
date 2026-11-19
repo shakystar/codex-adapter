@@ -17,17 +17,25 @@ import (
 
 func main() {
 	if err := run(); err != nil {
-		json.NewEncoder(os.Stderr).Encode(map[string]any{"event": "error", "error": err.Error()})
+		json.NewEncoder(os.Stderr).Encode(map[string]any{"event": "error", "error": err.Error(), "failure": adapter.FailureOf(err)})
 		os.Exit(1)
 	}
 }
 func run() error {
 	binary := flag.String("codex", "codex", "installed Codex executable")
 	state := flag.String("state", "", "persistent adapter state directory (required for execution)")
+	inspect := flag.String("inspect-session", "", "read local session evidence without starting Codex")
 	doctor := flag.Bool("doctor", false, "check account without a model turn")
 	flag.Parse()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	if *inspect != "" {
+		evidence, err := adapter.InspectSession(*state, *inspect)
+		if err != nil {
+			return err
+		}
+		return json.NewEncoder(os.Stdout).Encode(map[string]any{"event": "inspection", "inspection": evidence})
+	}
 	cfg := rpc.Config{Command: *binary}
 	if *doctor {
 		cfg.Args = []string{"app-server", "--stdio", "-c", "web_search=\"disabled\"", "-c", "features.apps=false", "-c", "features.plugins=false"}
@@ -58,7 +66,7 @@ func run() error {
 	if err = req.Validate(); err != nil {
 		return err
 	}
-	a, err := adapter.New(adapter.Config{RPC: cfg, StateDir: *state, OnStatus: func(s adapter.Status) {
+	a, err := adapter.NewContext(ctx, adapter.Config{RPC: cfg, StateDir: *state, OnStatus: func(s adapter.Status) {
 		json.NewEncoder(os.Stderr).Encode(map[string]any{"event": "status", "status": s})
 	}})
 	if err != nil {
