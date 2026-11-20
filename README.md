@@ -15,7 +15,7 @@ go build -o bin/codex-adapter ./cmd/codex-adapter
 ./bin/codex-adapter --doctor
 ```
 
-`--doctor` calls `account/read` without a model turn or forced token refresh. Successful account lookup does not prove model readiness. A routing timeout is not proof of rate limiting.
+`--doctor` calls `account/read` without a model turn or forced token refresh. Successful account lookup does not prove model readiness. A routing timeout is not proof of rate limiting. For `workspace_routing_timeout`, see the [Docker address comparison and temporary workaround](docs/validation.md#docker-workspace-routing-check-2026-11-20).
 
 ## Execute from any language
 
