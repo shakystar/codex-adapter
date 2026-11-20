@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
-	"fmt"
 	adapter "github.com/shakystar/codex-adapter"
 	rpc "github.com/shakystar/codex-adapter/rpc"
 	"io"
@@ -21,7 +20,12 @@ func main() {
 		os.Exit(1)
 	}
 }
+func cliFailure(stage, execution string) error {
+	return &adapter.Failure{Version: 1, Stage: stage, Code: "operation_failed", Execution: execution}
+}
+
 func run() error {
+	model := flag.String("model", "", "optional Codex model for this execution")
 	binary := flag.String("codex", "codex", "installed Codex executable")
 	state := flag.String("state", "", "persistent adapter state directory (required for execution)")
 	inspect := flag.String("inspect-session", "", "read local session evidence without starting Codex")
@@ -54,19 +58,19 @@ func run() error {
 	}
 	data, err := io.ReadAll(io.LimitReader(os.Stdin, 256<<10+1))
 	if err != nil {
-		return err
+		return cliFailure("request_read", adapter.NotStarted)
 	}
 	if len(data) > 256<<10 {
-		return fmt.Errorf("request exceeds 256KiB")
+		return cliFailure("request_validation", adapter.NotStarted)
 	}
 	var req adapter.Request
 	if err = json.Unmarshal(data, &req); err != nil {
-		return fmt.Errorf("invalid request JSON")
+		return cliFailure("request_decode", adapter.NotStarted)
 	}
 	if err = req.Validate(); err != nil {
-		return err
+		return cliFailure("request_validation", adapter.NotStarted)
 	}
-	a, err := adapter.NewContext(ctx, adapter.Config{RPC: cfg, StateDir: *state, OnStatus: func(s adapter.Status) {
+	a, err := adapter.NewContext(ctx, adapter.Config{Model: *model, RPC: cfg, StateDir: *state, OnStatus: func(s adapter.Status) {
 		json.NewEncoder(os.Stderr).Encode(map[string]any{"event": "status", "status": s})
 	}})
 	if err != nil {
@@ -77,5 +81,8 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	return json.NewEncoder(os.Stdout).Encode(map[string]any{"event": "result", "result": result})
+	if err := json.NewEncoder(os.Stdout).Encode(map[string]any{"event": "result", "result": result, "usage": a.Usage()}); err != nil {
+		return cliFailure("output", adapter.Completed)
+	}
+	return nil
 }

@@ -27,7 +27,7 @@ Provide one JSON request on stdin. The command writes a result event to stdout a
 JSON
 ```
 
-See [the JSON contract](docs/protocol.md). Go callers can import `github.com/shakystar/codex-adapter` and use `New(Config)` / `Execute(ctx, Request)`. Raw stdio RPC is available at `/rpc`.
+The optional `--model` flag selects a model for the turn. The result event includes token usage. See [the JSON contract and Python example](docs/protocol.md). Go callers can import `github.com/shakystar/codex-adapter` and use `New(Config)` / `Execute(ctx, Request)`. Raw stdio RPC is available at `/rpc`.
 
 ## Behavior and limits
 

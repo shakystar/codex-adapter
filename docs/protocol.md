@@ -4,7 +4,9 @@ Implementation language does not constrain callers. This is a single-request CLI
 
 ## Invocation
 
-`codex-adapter --codex /path/to/codex --state /path/to/state`
+`codex-adapter --codex /path/to/codex --state /path/to/state [--model MODEL]`
+
+When supplied, `--model` sets the model on thread start and resume. Omitting the flag uses the configured Codex model.
 
 Read a single JSON object from stdin (maximum 256 KiB), then close stdin. No secret credentials belong in the request. Authentication is handled by the installed Codex client.
 
@@ -20,7 +22,14 @@ Read a single JSON object from stdin (maximum 256 KiB), then close stdin. No sec
 
 Instructions and workspace must match the saved mapping when resuming a session. Changing them requires a new session key. The adapter adds profile instructions; keep application roles and work queues outside this API.
 
-Success stdout: `{"event":"result","result":{"text":"...","session":"...","pid":123}}`.
+Success stdout contains one JSON object.
+
+```json
+{"event":"result","result":{"text":"...","session":"...","pid":123},"usage":{"scope":"successful-turn-last-notification","inputTokens":10,"outputTokens":3,"cachedInputTokens":2,"known":true,"completedTurns":1,"measuredTurns":1}}
+```
+
+The CLI reports usage for the successful turn in this invocation, including a resumed session. Check `known` and `measuredTurns` before using token counts. Missing usage can produce zero counts with `known:false`.
+
 Progress stderr: `{"event":"status","status":{...}}`.
 Failure stderr: `{"event":"error","error":"sanitized error"}` and exit code 1. Application output belongs in result.text and is not considered sanitized telemetry.
 
@@ -74,3 +83,30 @@ Intent remains until successful cleanup; no API silently clears it or resends a 
 Adapter owns protocol failure classification and bounded startup recovery. Runtime owns
 receipts, session quarantine and deduplication. Orchestrator owns scheduling/waiting/
 operator decisions. No external routing-service repair or exactly-once guarantee is claimed.
+
+## Python caller
+
+The standard library can call the CLI and retain the terminal error event alongside any status messages.
+
+```python
+import json
+import subprocess
+
+
+def run_turn(binary, state, request, model):
+    command = [binary, "--state", str(state), "--model", model]
+    proc = subprocess.run(command, input=json.dumps(request), capture_output=True,
+                          text=True, encoding="utf-8")
+    if proc.returncode:
+        for line in reversed(proc.stderr.splitlines()):
+            try:
+                event = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(event, dict) and event.get("event") == "error":
+                return event
+        raise RuntimeError("Adapter stopped without a terminal error event")
+    return json.loads(proc.stdout)
+```
+
+Pass the request fields in the table above. Read `event["result"]["text"]` and `event["usage"]` on success. For an error, inspect `event["failure"]["execution"]` when available. A missing terminal event leaves dispatch uncertain.

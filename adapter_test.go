@@ -13,10 +13,22 @@ import (
 	"time"
 )
 
+// TestMain lets the CLI contract test use this test binary as its Codex app-server.
+func TestMain(m *testing.M) {
+	if len(os.Args) > 1 && os.Args[1] == "app-server" && os.Getenv("ROLE_RUNTIME_ADAPTER_HELPER") == "1" {
+		serveAdapterPeer()
+	}
+	os.Exit(m.Run())
+}
+
 func TestCodexAdapterProcess(t *testing.T) {
 	if os.Getenv("ROLE_RUNTIME_ADAPTER_HELPER") != "1" {
 		return
 	}
+	serveAdapterPeer()
+}
+
+func serveAdapterPeer() {
 	scanner := bufio.NewScanner(os.Stdin)
 	encoder := json.NewEncoder(os.Stdout)
 	send := func(v any) {
@@ -99,6 +111,13 @@ func TestCodexAdapterProcess(t *testing.T) {
 			}
 			result = map[string]any{"data": []string{activeID}}
 		case "thread/start", "thread/resume":
+			if want, check := os.LookupEnv("CODEX_ADAPTER_TEST_MODEL"); check {
+				got, present := req.Params["model"]
+				var model string
+				if present != (want != "") || (present && (json.Unmarshal(got, &model) != nil || model != want)) {
+					os.Exit(11)
+				}
+			}
 			var cwd, instructions, id string
 			json.Unmarshal(req.Params["cwd"], &cwd)
 			json.Unmarshal(req.Params["baseInstructions"], &instructions)
