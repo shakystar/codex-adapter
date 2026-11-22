@@ -1,48 +1,46 @@
-# Validation status
+<a id="validation-status"></a>
+# 검증 현황
 
-Extracted from role-runtime's Codex integration. Tests use fake app-server subprocesses and cover bounded transport, cancellation, heartbeat, role/session identity, and process restart restoration. role-runtime retains its integration suite for scheduler and durable-store behavior.
+이 어댑터는 role-runtime의 Codex 연동 코드에서 분리했습니다. 테스트는 모의 app-server 하위 프로세스를 사용해 전송 한도, 취소, 하트비트, 역할·세션 식별, 프로세스 재시작 후 복원을 검사합니다. 스케줄러와 영속 저장소 동작에 대한 통합 검사는 role-runtime에서 유지합니다.
 
-Live recovery was validated in one complete six-role run on 2026-11-19; sustained availability and the earlier intermittent routing timeout cause remain unproven. Prior account/read calls intermittently returned `workspace routing discovery timed out`; both original and isolated local environments also had successful account lookups. No evidence proves a local working-directory defect or rate limiting. A passing unit test or doctor call is not proof of a successful live model turn or full research pipeline.
+2026-11-19에 6개 역할을 모두 실행해 실제 모델 경로의 복구를 한 차례 확인했습니다. 지속 가용성과 이전의 간헐적 라우팅 시간 초과 원인은 확인되지 않았습니다. 앞선 account/read 호출에서는 간헐적으로 `workspace routing discovery timed out`이 반환됐으며 기존 로컬 환경과 격리한 로컬 환경 모두에서 계정 조회가 성공한 적도 있습니다. 로컬 작업 디렉터리 결함이나 호출 빈도 제한을 입증한 근거는 없습니다. 단위 테스트나 doctor 성공만으로 실제 모델 턴 또는 전체 조사 파이프라인의 성공을 판정할 수 없습니다.
 
-CLI versions observed: 0.166.0 and 0.169.1. The Codex executable is not redistributed. Managed ChatGPT authentication is supported; externally managed token refresh is not. Consult current OpenAI authentication terms before commercial or hosted use.
+당시 확인한 CLI 버전은 0.166.0과 0.169.1입니다. Codex 실행 파일을 재배포하지 않습니다. 관리형 ChatGPT 인증을 지원하며 외부에서 관리하는 토큰 갱신은 지원하지 않습니다. 상업적 사용이나 호스팅 시에는 적용 시점의 OpenAI 인증 조건을 확인합니다.
 
-## Live recovery probe, 2026-11-18
+<a id="live-recovery-probe-2026-11-18"></a>
+## 실제 모델 복구 검사 (2026-11-18)
 
-The published adapter commit 2e2a0da completed a single advisory model turn via the language-independent JSON CLI using Codex 0.169.1. The expected literal `RECOVERY_OK` matched the actual final output; turn execution and thread unload took about 3.76 seconds. No tools were used. This proves one successful live execution, not sustained availability or a repaired upstream routing service. A user-canceled run completed four roles; later runs exposed a runtime wall-clock lease issue, now fixed with monotonic deadlines and regression tests. A subsequent run stopped at account preflight with workspace_routing_timeout before any model turn. These failures remain in the runtime experiment history; a later full run succeeded as recorded below.
+공개된 어댑터 커밋 2e2a0da에서 언어 독립적인 JSON CLI와 Codex 0.169.1로 advisory 모델 턴 1회를 완료했습니다. 최종 출력이 예상 문자열 `RECOVERY_OK`와 일치했고 턴 실행부터 스레드 언로드까지 약 3.76초가 걸렸습니다. 도구는 사용하지 않았습니다. 실제 실행 1건이 성공했으며 지속 가용성이나 상위 라우팅 서비스 복구 여부는 확인하지 않았습니다. 사용자가 취소한 한 실행은 4개 역할을 완료했습니다. 이후 실행에서 시스템 시각에 의존하는 런타임 임대 만료 문제가 발견돼 단조 시계 기반 만료 시각으로 수정하고 회귀 검사를 추가했습니다. 후속 실행 한 건은 모델 턴 시작 전에 계정 사전 검사에서 workspace_routing_timeout으로 중단됐습니다. 실패 내역은 런타임 실험 기록에 보존했고, 이후 전체 실행이 성공했습니다.
 
-A controlled comparison of inherited versus newly created process groups succeeded in all three account lookups (0.50/0.30/0.45 seconds). Matching Python initialization parameters and string RPC IDs to the Go client also succeeded, followed by a successful Go doctor call in the same execution environment. These results do not support a deterministic process-group or JSON-RPC formatting defect; earlier intermittent failures remain documented.
+기존 프로세스 그룹을 상속하는 경우와 새 그룹을 만드는 경우를 통제해 비교한 결과, 계정 조회 3회가 모두 성공했습니다(0.50초, 0.30초, 0.45초). Python 초기화 매개변수와 문자열 RPC ID를 Go 클라이언트와 일치시킨 검사도 성공했고, 이어 같은 환경에서 Go doctor 호출도 성공했습니다. 이 결과에서는 프로세스 그룹이나 JSON-RPC 형식에 따라 항상 발생하는 결함이 확인되지 않았습니다. 이전의 간헐적 실패도 기록에 남아 있습니다.
 
-## Complete pipeline verification, 2026-11-19
+<a id="complete-pipeline-verification-2026-11-19"></a>
+## 전체 파이프라인 검증 (2026-11-19)
 
-role-runtime commit 12bd987, using this adapter's implementation commit 2e2a0da and installed Codex 0.169.1, completed six specialist roles on two workers in 1357.13 seconds. Five real SMS waits resumed successfully; all six durable task receipts completed. The two research turns overlapped. Four research roles recorded 15 web-tool completions in total, and advisory roles recorded none. There were no observed backend errors.
+role-runtime 커밋 12bd987에서 이 어댑터의 구현 커밋 2e2a0da와 설치된 Codex 0.169.1을 사용했습니다. 워커 2개가 전문 역할 6개의 작업을 1357.13초에 마쳤습니다. 실제 SMS 대기 5건이 모두 재개됐고, 작업 6건 모두 완료 영수증이 영구 저장됐습니다. 두 조사 턴의 실행 구간이 겹쳤습니다. 조사 역할 4개에서 웹 도구 호출 완료가 총 15건 기록됐고 advisory 역할에서는 0건이었습니다. 관찰된 백엔드 오류는 없었습니다.
 
-Independent artifact checks verified six document hashes, six SMS artifact references, and all five predecessor references in the final decision input. This validates transport and evidence handoff, not the truth of model research or the commercial viability of its decision. See [the runtime report](https://github.com/shakystar/role-runtime/blob/main/experiments/event-search/target-review-team.md).
+독립적인 산출물 검사에서 문서 해시 6개, SMS의 산출물 참조 6개, 최종 결정 입력의 선행 작업 참조 5개 전부를 확인했습니다. 검증 범위는 전송과 근거 인계입니다. 모델 조사 내용의 진위와 결정의 사업 타당성은 평가하지 않았습니다. [런타임 보고서](https://github.com/shakystar/role-runtime/blob/main/experiments/event-search/target-review-team.md)
 
-The host had AC idle sleep configured to one minute. This run used process-scoped `caffeinate -i`; its idle-sleep assertion was confirmed active and released automatically on exit. Global power settings were unchanged. A separately approved account request returned HTTP 200, and the official app-server doctor succeeded before the run. Sleep is a plausible contributor to earlier interruptions, but this does not establish the cause of every routing timeout.
+호스트는 AC 전원에서 유휴 1분 후 절전하도록 설정돼 있었습니다. 이번 실행에는 프로세스에만 적용되는 `caffeinate -i`를 사용했습니다. 실행 중 유휴 절전 방지가 활성화되고 종료 시 자동 해제됐음을 확인했습니다. 전역 전원 설정은 변경하지 않았습니다. 별도로 승인받은 계정 요청은 HTTP 200을 반환했고 실행 전 공식 app-server doctor가 성공했습니다. 유휴 절전이 이전 중단에 영향을 줬을 가능성은 있으나 모든 라우팅 시간 초과의 원인은 확인되지 않았습니다.
 
-## Failure responsibility hardening — 2026-11-19
+<a id="failure-responsibility-hardening--2026-11-19"></a>
+## 실패 처리 책임 검증 (2026-11-19)
 
-Synthetic real-stdio subprocess tests verify transient preflight recovery, three-attempt
-exhaustion, nonretryable authorization failure, cancellation during backoff, sanitized
-JSON failure fields, lost turn acknowledgment, acknowledged failed turns, successful
-completion evidence and no replay after reopening. Call logs assert zero turn/start
-requests during startup recovery and exactly one for lost-ack/failed-turn scenarios.
-Existing session, heartbeat, tool and RPC tests remain part of the race suite.
-These are injected failures, not evidence that the upstream routing service was repaired.
-The local inspection API is not remote reconciliation; uncertain intents remain blocked.
+실제 표준 입출력을 사용하는 하위 프로세스에 합성 장애를 주입해 일시적인 사전 검사 실패 후 복구, 3회 재시도 한도 소진, 재시도할 수 없는 인증 실패, 재시도 대기 중 취소, 민감 정보를 제거한 JSON 오류 필드, 턴 시작 확인 응답의 유실, 확인 응답 후 턴 실패, 성공 완료 근거, 다시 열었을 때 재실행 방지를 검사했습니다. 호출 로그에서 시작 단계 복구 중 turn/start 요청은 0회였고, 확인 응답 유실 및 턴 실패 시나리오에서는 각각 정확히 1회였음을 확인했습니다. 기존 세션·하트비트·도구·RPC 테스트도 경쟁 상태 검사에 포함합니다. 장애를 주입한 결과만으로 상위 라우팅 서비스의 복구 여부는 확인할 수 없습니다. 로컬 조회 API는 원격 실행 상태를 대조하지 않으며, 실행 여부가 불확실한 요청은 재실행이 차단됩니다.
 
-## Docker workspace routing check (2026-11-20)
+<a id="docker-workspace-routing-check-2026-11-20"></a>
+## Docker 작업공간 라우팅 검사 (2026-11-20)
 
-On macOS and Linux/amd64 Docker, Codex CLI 0.170.0 returned `workspace routing discovery timed out` on two direct `account/read` calls per environment. Each call used `refreshToken=false` and took about 15 seconds. The Linux CLI recognized the ChatGPT login with both a read-only mounted auth file and a writable temporary copy. Both setups exhibited the timeout. The same error was already recorded on November 18, before the November 20 Python caller integration.
+macOS와 Linux/amd64 Docker에서 Codex CLI 0.170.0으로 `account/read`를 각각 2회 직접 호출했고 모두 `workspace routing discovery timed out`을 반환했습니다. 매번 `refreshToken=false`를 사용했으며 호출당 약 15초가 걸렸습니다. Linux CLI는 인증 파일을 읽기 전용으로 마운트한 경우와 쓰기 가능한 임시 복사본을 사용한 경우 모두 ChatGPT 로그인을 인식했으며 양쪽 모두 시간 초과가 발생했습니다. 같은 오류는 11월 20일 Python 호출부 연동 전인 11월 18일에도 기록됐습니다.
 
-We compared the two IPv4 addresses returned by DNS for `chatgpt.com`. HTTPS probes used the original hostname and normal certificate verification. For the account check, two disposable containers used the same image, Codex binary, Go doctor and read-only credentials. Only the per-container address mapping differed.
+DNS가 `chatgpt.com`에 대해 반환한 IPv4 주소 2개를 비교했습니다. HTTPS 검사는 원래 호스트 이름과 정상적인 인증서 검증 절차를 사용했습니다. 계정 검사는 일회성 컨테이너 2개에서 동일한 이미지·Codex 바이너리·Go doctor·읽기 전용 인증 정보를 사용하고 컨테이너별 주소 매핑만 바꿨습니다.
 
-| DNS address observed | HTTPS from macOS and Docker | Go adapter doctor in Docker |
+| 확인한 DNS 주소 | macOS와 Docker의 HTTPS 결과 | Docker의 Go 어댑터 doctor 결과 |
 | --- | --- | --- |
-| `104.18.32.47` | 2/2 HTTP 200 in each environment, all under 0.5 s | 2/2 returned `routingAvailable=true` |
-| `172.64.155.209` | 2/2 TCP connect timeouts in each environment, with a 5 s limit | 2/2 returned `workspace_routing_timeout` |
+| `104.18.32.47` | 각 환경에서 2/2 HTTP 200, 모두 0.5초 미만 | 2/2 `routingAvailable=true` 반환 |
+| `172.64.155.209` | 각 환경에서 2/2 TCP 연결 시간 초과(제한 5초) | 2/2 `workspace_routing_timeout` 반환 |
 
-For a one-run check, resolve `chatgpt.com` again, then test each current IPv4 address with the following command. Set `IP` to one address at a time.
+한 차례 확인하려면 `chatgpt.com`의 DNS를 다시 조회하고 현재 IPv4 주소를 하나씩 `IP`에 지정해 다음 명령을 실행합니다.
 
 ```sh
 curl --ipv4 --resolve "chatgpt.com:443:${IP}" --connect-timeout 5 --max-time 8 \
@@ -50,6 +48,6 @@ curl --ipv4 --resolve "chatgpt.com:443:${IP}" --connect-timeout 5 --max-time 8 \
   --write-out 'HTTP %{http_code}, TCP %{time_connect}s, total %{time_total}s\n' https://chatgpt.com/
 ```
 
-Add `--add-host="chatgpt.com:${IP}"` to a single `docker run --rm` using a responding address from the current lookup. Run `codex-adapter --doctor` in that container. The mapping expires with the container. This comparison identified address-dependent TCP reachability from the test network. The failing network hop and the cause of earlier incidents remain unknown.
+현재 조회 결과에서 응답한 주소를 사용해 일회성 `docker run --rm`에 `--add-host="chatgpt.com:${IP}"`를 추가하고, 해당 컨테이너 안에서 `codex-adapter --doctor`를 실행합니다. 컨테이너가 제거되면 매핑도 사라집니다. 검사 네트워크에서는 주소에 따라 TCP 연결 가능 여부가 달라졌습니다. 실패가 발생한 네트워크 구간과 과거 장애 원인은 확인되지 않았습니다.
 
-**Live turn with the temporary mapping.** At 04:35 UTC a fresh Linux/amd64 container used `--add-host=chatgpt.com:104.18.32.47` and Codex CLI 0.170.0. The Go doctor returned `routingAvailable=true`. In the same container, agent-eval then executed one planned M3 solo maintenance-notice task through role-orchestrator and role-runtime with the Codex backend. The writer completed in 5.41 seconds of recorded run time. The runtime receipt reported `succeeded`, its output matched the saved artifact byte-for-byte, and the request matched the recorded attempt ID. The 127-byte output described the checkout outage, continued browsing and retry time. The artifact-presence rule passed (one judgment, zero scorer errors). Output SHA-256 was `54fb607f980029e0d93eae0187e34bd2be470a4abfed5258cff44af58b183ff0`. This follow-up covered one solo turn.
+**임시 매핑을 적용한 실제 모델 턴.** 04:35 UTC에 새 Linux/amd64 컨테이너에서 `--add-host=chatgpt.com:104.18.32.47`과 Codex CLI 0.170.0을 사용했습니다. Go doctor는 `routingAvailable=true`를 반환했습니다. 같은 컨테이너에서 agent-eval이 role-orchestrator와 role-runtime을 거쳐 Codex 백엔드로 예정된 M3 단독 점검 공지 작성 과제 1건을 실행했습니다. 기록된 작성 시간은 5.41초입니다. 런타임 영수증 상태는 `succeeded`였고 출력과 저장된 산출물이 바이트 단위로 일치했으며 요청과 기록된 시도 ID도 일치했습니다. 127바이트 출력에는 결제 중단, 탐색 가능 여부, 재시도 시각이 담겼습니다. 산출물 존재 규칙은 충족 1건, 채점기 오류 0건이었습니다. 출력 SHA-256은 `54fb607f980029e0d93eae0187e34bd2be470a4abfed5258cff44af58b183ff0`입니다. 이 후속 검증의 범위는 단독 턴 1회입니다.

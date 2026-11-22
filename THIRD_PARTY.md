@@ -1,5 +1,7 @@
-# Dependencies and provenance
+<a id="dependencies-and-provenance"></a>
 
-The Go module uses the standard library only. Initial RPC and session handling were extracted from shakystar/role-runtime, based on its 5f06913-era implementation and subsequent local work. No Codex executable or credentials are included.
+# 의존성과 출처
 
-Runtime integration: separately installed OpenAI Codex CLI 0.166.0 / 0.169.1. Its upstream project is https://github.com/openai/codex (Apache-2.0 source repository); installed binary redistribution terms were not reviewed because this project does not redistribute it. The wire schema is experimental and can change. Replace the executable using `--codex` / rpc.Config.Command; alternate backends require a separate implementation.
+Go 모듈은 표준 라이브러리만 사용합니다. 초기 RPC 및 세션 처리 코드는 shakystar/role-runtime의 5f06913 시점 구현과 이후 로컬 작업에서 분리했습니다. Codex 실행 파일과 인증 정보는 배포물에 포함하지 않습니다.
+
+실행 시 별도 설치한 OpenAI Codex CLI 0.166.0 / 0.169.1과 연동합니다. [OpenAI Codex 소스 저장소](https://github.com/openai/codex)의 라이선스는 Apache-2.0입니다. 이 프로젝트는 설치된 바이너리를 재배포하지 않아 바이너리 재배포 조건은 검토하지 않았습니다. 통신 스키마는 실험 단계이며 변경될 수 있습니다. `--codex` 또는 `rpc.Config.Command`로 실행 파일을 지정합니다. 다른 백엔드를 사용하려면 별도 구현이 필요합니다.
