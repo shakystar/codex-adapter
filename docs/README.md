@@ -9,7 +9,9 @@
 
 ## 확인된 문서 공백
 
-JSON CLI와 Python 예시는 있지만 Go 호출자가 초기화부터 실행·오류 확인·종료까지 따라갈 수 있는 예시는 없다. 현재 Go API의 동작 근거는 [어댑터 구현](../adapter.go), [오류 분류](../failure.go), [CLI 호출부](../cmd/codex-adapter/main.go)에 있다.
+| 필요한 문서 | 필요한 이유 | 작성 완료 조건 |
+| --- | --- | --- |
+| Go 호출 예제 | [JSON 계약](protocol.md)은 CLI와 Python 호출을 설명한다. Go 호출자가 어댑터 수명주기와 오류 처리 책임을 확인하려면 현재 [어댑터](../adapter.go), [오류 분류](../failure.go), [CLI 호출부](../cmd/codex-adapter/main.go)를 각각 읽어야 한다. | 초기화, 작업 실행, 구조화 오류 확인, 종료까지 담은 Go 예제를 제공하고 해당 버전에서 컴파일을 확인한다. |
 
 ## 문서 관리
 
