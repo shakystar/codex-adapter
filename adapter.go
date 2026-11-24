@@ -31,6 +31,7 @@ type Config struct {
 	TaskTimeout       time.Duration
 	StartupTimeout    time.Duration
 	Model             string
+	ReasoningEffort   string // Empty leaves the app-server default unchanged.
 	OutputSchema      json.RawMessage
 	OnProcessStart    func(int)
 	HeartbeatInterval time.Duration
@@ -39,6 +40,18 @@ type Config struct {
 	// It receives metadata only, never prompts, output, reasoning, or config values.
 	OnStatus func(Status)
 }
+
+func turnStartParams(threadID, input any, cfg Config) map[string]any {
+	params := map[string]any{"threadId": threadID, "input": []any{map[string]any{"type": "text", "text": input}}, "approvalPolicy": "never", "sandboxPolicy": map[string]any{"type": "readOnly", "networkAccess": false}}
+	if len(cfg.OutputSchema) > 0 {
+		params["outputSchema"] = cfg.OutputSchema
+	}
+	if cfg.ReasoningEffort != "" {
+		params["effort"] = cfg.ReasoningEffort
+	}
+	return params
+}
+
 type Status struct {
 	Failure            *Failure      `json:"failure,omitempty"`
 	TaskID             string        `json:"taskId"`
@@ -114,6 +127,11 @@ func New(cfg Config) (*Adapter, error) { return NewContext(context.Background(),
 
 func NewContext(ctx context.Context, cfg Config) (adapter *Adapter, err error) {
 	defer func() { err = failure(err, "initialize", NotStarted, 0) }()
+	switch cfg.ReasoningEffort {
+	case "", "low", "medium", "high":
+	default:
+		return nil, errors.New("invalid reasoning effort: expected low, medium, or high")
+	}
 	if cfg.StartupAttempts < 0 || cfg.StartupAttempts > 5 || cfg.RetryBackoff < 0 {
 		return nil, errors.New("invalid startup retry policy")
 	}
@@ -392,10 +410,7 @@ func (a *Adapter) Execute(parent context.Context, t Request) (result Result, err
 	var started struct {
 		Turn turn `json:"turn"`
 	}
-	turnParams := map[string]any{"threadId": m.ThreadID, "input": []any{map[string]any{"type": "text", "text": t.Input}}, "approvalPolicy": "never", "sandboxPolicy": map[string]any{"type": "readOnly", "networkAccess": false}}
-	if len(a.cfg.OutputSchema) > 0 {
-		turnParams["outputSchema"] = a.cfg.OutputSchema
-	}
+	turnParams := turnStartParams(m.ThreadID, t.Input, a.cfg)
 	stage, execution = "turn_start", Unknown
 	emit("starting")
 	if err = controlCall("turn/start", turnParams, &started); err != nil {
