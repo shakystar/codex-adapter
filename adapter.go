@@ -688,6 +688,14 @@ waitTurn:
 	a.usage.Known = !a.usageIncomplete && a.usage.CompletedTurns == a.usage.MeasuredTurns
 	a.mu.Unlock()
 	result.Text = text
+	result.TurnID = started.Turn.ID
+	if usage.Known {
+		result.TurnUsage = &TurnUsage{
+			InputTokens:       usage.InputTokens,
+			OutputTokens:      usage.OutputTokens,
+			CachedInputTokens: usage.CachedInputTokens,
+		}
+	}
 	emit("completed")
 	return result, nil
 }
