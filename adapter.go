@@ -560,9 +560,7 @@ waitTurn:
 				Item       item            `json:"item"`
 				Delta      string          `json:"delta"`
 				Status     json.RawMessage `json:"status"`
-				TokenUsage struct {
-					Last Usage `json:"last"`
-				} `json:"tokenUsage"`
+				TokenUsage json.RawMessage `json:"tokenUsage"`
 			}
 			if err = json.Unmarshal(n.Params, &e); err != nil {
 				return result, fmt.Errorf("codex notification: %w", err)
@@ -622,8 +620,7 @@ waitTurn:
 				}
 			case "thread/tokenUsage/updated":
 				if e.TurnID == started.Turn.ID {
-					usage = e.TokenUsage.Last
-					usage.Known = true
+					usage = decodeLastUsage(e.TokenUsage)
 				}
 			case "turn/completed":
 				if e.Turn.ID != started.Turn.ID {
@@ -698,6 +695,32 @@ waitTurn:
 	}
 	emit("completed")
 	return result, nil
+}
+
+func decodeLastUsage(raw json.RawMessage) Usage {
+	var wire struct {
+		Last *struct {
+			InputTokens       *int64 `json:"inputTokens"`
+			OutputTokens      *int64 `json:"outputTokens"`
+			CachedInputTokens *int64 `json:"cachedInputTokens"`
+		} `json:"last"`
+	}
+	if err := json.Unmarshal(raw, &wire); err != nil || wire.Last == nil {
+		return Usage{}
+	}
+	last := wire.Last
+	if last.InputTokens == nil || last.OutputTokens == nil || last.CachedInputTokens == nil {
+		return Usage{}
+	}
+	if *last.InputTokens < 0 || *last.OutputTokens < 0 || *last.CachedInputTokens < 0 {
+		return Usage{}
+	}
+	return Usage{
+		InputTokens:       *last.InputTokens,
+		OutputTokens:      *last.OutputTokens,
+		CachedInputTokens: *last.CachedInputTokens,
+		Known:             true,
+	}
 }
 
 func supportedNotification(method string) bool {
