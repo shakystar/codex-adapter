@@ -20,10 +20,18 @@ type Request struct {
 	Tools        []string `json:"tools"`
 	Input        string   `json:"input"`
 }
+type TurnUsage struct {
+	InputTokens       int64 `json:"input_tokens"`
+	OutputTokens      int64 `json:"output_tokens"`
+	CachedInputTokens int64 `json:"cached_input_tokens"`
+}
+
 type Result struct {
-	Text    string `json:"text,omitempty"`
-	Session string `json:"session,omitempty"`
-	PID     int    `json:"pid,omitempty"`
+	Text      string     `json:"text,omitempty"`
+	Session   string     `json:"session,omitempty"`
+	PID       int        `json:"pid,omitempty"`
+	TurnID    string     `json:"turn_id,omitempty"`
+	TurnUsage *TurnUsage `json:"turn_usage,omitempty"`
 }
 
 var sessionKeyPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
